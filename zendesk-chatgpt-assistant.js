@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Zendesk ChatGPT Multi-Function Assistant 
+// @name         Zendesk ChatGPT Multi-Function Assistant
 // @namespace    http://tampermonkey.net/
 // @version      1.0.0
-// @description  7-in-1 ChatGPT assistant: CC=Confluence, EE=Internal TEE, DD=Datadog Docs, ZZ=Zendesk, GG=Google Cloud Search, JJ=Japanese Improve, TT=Translation
+// @description  8-in-1 ChatGPT assistant: CC=Confluence, EE=Internal TEE, DD=Datadog Docs, ZZ=Zendesk, GG=Google Cloud Search, JJ=Japanese Improve, TT=Translation, HH=Help
 // @match        https://*.zendesk.com/*
 // @author       Yuan Chang
 // ==/UserScript==
@@ -57,13 +57,13 @@ This script provides seven main functions for Zendesk customer support:
    - Quickly double-click the 'T' key twice
    - ChatGPT translates text (auto-detects language and translates to appropriate target)
    - Translated text is automatically copied to clipboard
-   - Supports Japanese ? English translation
+           - Supports Japanese ? English translation
 
 Status indicators appear next to selected text:
-- ? Processing... (orange)
-- ? Done (green)
-- ? Copied (blue)
-- ? Error (red)
+        - ? Processing... (orange)
+        - ? Done (green)
+        - ? Copied (blue)
+        - ? Error (red)
 
 Requirements:
 - Valid OpenAI API key configured in the script
@@ -82,7 +82,7 @@ Requirements:
     // Configuration
     const CONFIG = {
         api: {
-            key: "YOUR_OPENAI_API_KEY_HERE", // ?? Replace with your actual OpenAI API key
+            key: "YOUR_API_KEY_HERE", // Replace with your actual OpenAI API key
             model: "gpt-4",
             timeout: 30000
         },
@@ -91,10 +91,10 @@ Requirements:
             statusTimeout: 2000,
             dialogColor: '#632CA6'
         },
-        keys: ['c', 'e', 'd', 'z', 'j', 't', 'g'],
+        keys: ['c', 'e', 'd', 'z', 'j', 't', 'g', 'h'],
         searchTypes: {
             c: 'confluence', e: 'internal', d: 'datadog',
-            z: 'zendesk', j: 'japanese', t: 'translation', g: 'google'
+            z: 'zendesk', j: 'japanese', t: 'translation', g: 'google', h: 'help'
         },
         urls: {
             confluence: 'https://datadoghq.atlassian.net/wiki/search?text=',
@@ -105,9 +105,178 @@ Requirements:
         messages: {
             internal: 'Question to TEE  (copied to clipboard)',
             japanese: 'Improved Japanese text (copied to clipboard)',
-            translation: 'Translated text (copied to clipboard)'
+            translation: 'Translated text (copied to clipboard)',
+            help: 'Help guide displayed'
         }
     };
+
+    // ===== CHATGPT PROMPTS CONFIGURATION =====
+    // All prompts are centralized here for easy modification
+    const PROMPTS = {
+        // CC - Confluence Search
+        confluence: {
+            system: "You are a helpful support assistant.",
+            user: (text) => `Convert the following customer message into a short, clear technical question (maximum 10-15 words). Focus on the main issue and make it a proper question. Return only the question without quotes or additional formatting:\n\n${text}`,
+            temperature: 0.2
+        },
+
+        // EE - Internal TEE Question
+        internal: {
+            system: "You are a helpful assistant that formats customer issues for internal engineering discussions. Create clear, distinct Question and Background sections where the Question is direct and actionable, and Background provides necessary context.",
+            user: (text) => `Convert the following customer issue into a direct question format for asking internal TEE engineers. You MUST follow this exact format and ALWAYS end with "Thank you for your help in advance!":
+
+Question:
+[A single, direct, actionable question that TEE can immediately understand and answer - should be one clear sentence asking for specific help or information]
+
+Background:
+[Detailed context about the customer's situation, what they're trying to do, or what error they're encountering - only include this section if the question needs additional context to be understood]
+
+Thank you for your help in advance!
+
+IMPORTANT: You MUST always include "Thank you for your help in advance!" at the end of every response.
+
+Guidelines:
+- Question should be ONE clear, direct question that gets straight to the point
+- Question should ask for specific help, guidance, or information
+- Background should provide context that helps TEE understand the customer's situation
+- Background should include relevant details like error messages, configurations, or customer goals
+- Only include Background section if the question needs additional context
+- Keep it concise and professional
+- ALWAYS end with "Thank you for your help in advance!"
+
+Examples:
+
+Example 1 (Simple question - no background needed):
+Customer: "How do I set up alerts for high CPU usage?"
+→
+Question: How can a customer set up alerts for high CPU usage in Datadog?
+
+Thank you for your help in advance!
+
+Example 2 (Complex issue - background needed):
+Customer: "We're getting 'could not update remote-config state: rpc error: code = Unknown desc = database not open' when trying to enable APM on our Node.js app"
+→
+Question: How can we resolve the 'database not open' error when enabling APM?
+
+Background:
+Customer is trying to enable APM on their Node.js application but getting this specific error: "could not update remote-config state: rpc error: code = Unknown desc = database not open"
+
+Thank you for your help in advance!
+
+Example 3 (Feature question with context):
+Customer: "Our team wants to monitor custom business metrics from our e-commerce platform but we're not sure which approach is best for high-volume data"
+→
+Question: What's the recommended approach for monitoring custom business metrics from a high-volume e-commerce platform?
+
+Background:
+Customer has an e-commerce platform that generates high-volume data and wants to monitor custom business metrics, but they're unsure about the best implementation approach.
+
+Thank you for your help in advance!
+
+Here's the customer issue:
+
+${text}`,
+            temperature: 0.2
+        },
+
+        // DD - Datadog Keywords
+        datadog: {
+            system: "You are a helpful assistant that extracts Datadog-specific keywords for documentation search. Always return keywords in English only, maximum 3 keywords, separated by spaces without quotes, commas, or any punctuation. Translate any non-English terms to their English equivalents.",
+            user: (text) => `Extract Datadog-related keywords from the following customer message. Return ONLY keywords in English(maximum 3 keywords) separated by spaces. No quotes, commas, or punctuation.
+
+IMPORTANT RULES:
+- Always return keywords in ENGLISH only, never in Japanese or other languages
+- Maximum 3 keywords only
+- Use standard Datadog terminology in English
+- Translate Japanese terms to their English equivalents
+
+Examples:
+- "ブラウザテストに設定するStep(操作記録)の実行する/しないをif分のような形で制御できないか" → browser test step
+- "Is it possible to view custom events from Java Flight Recorder on Datadog's Java Profile screen" → Java Profile recorder
+- "How to configure APM traces for Node.js application" → APM traces Node.js
+- "ログエクスプローラーでログが表示されない" → Log Explorer logs
+
+Customer message: ${text}
+
+English keywords:`,
+            temperature: 0.1
+        },
+
+        // ZZ/GG - Zendesk/Google Search Keywords
+        zendesk: {
+            system: "You are a helpful assistant that analyzes customer text to determine if it's an error log (search directly) or general issue (extract maximum 4 keywords). Always start your response with either 'ERROR_LOG:' or 'KEYWORDS:'",
+            user: (text) => `Analyze the following text and determine if it's an error log or a general customer issue.
+
+If it's an ERROR LOG (contains technical error messages, stack traces, error codes, or system logs):
+- Return "ERROR_LOG:" followed by the exact error message
+
+If it's a GENERAL ISSUE (customer questions, feature requests, general problems):
+- Return "KEYWORDS:" followed by relevant keywords separated by spaces (maximum 4 keywords)
+
+Examples:
+- "could not update remote-config state: rpc error: code = Unknown desc = database not open" → ERROR_LOG:could not update remote-config state: rpc error: code = Unknown desc = database not open
+- "How to configure dashboard alerts for high CPU usage?" → KEYWORDS:dashboard alerts CPU usage
+- "RUM session replay feature not working properly on mobile devices" → KEYWORDS:RUM session replay mobile
+
+Customer text: ${text}
+
+Response:`,
+            temperature: 0.1
+        },
+
+        // JJ - Japanese Improvement
+        japanese: {
+            system: "あなたは日本語の文章校正の専門家です。同じ内容を3つの異なるスタイル（標準・丁寧・簡潔）で改善してください。",
+            user: (text) => `以下の日本語テキストを、より自然で丁寧なビジネス日本語に改善してください。**3つの異なるVersion**を提供してください。
+
+改善の観点：
+1. 文法の正確性を向上させる
+2. より自然で流暢な表現にする
+3. 敬語や丁寧語を適切に使用する
+4. 数値や単位の表記を統一する
+5. 文章の流れを改善し、読みやすくする
+6. ビジネス文書として適切な表現にする
+
+以下の形式で回答してください：
+
+【Version1：標準的な改善】
+[最も一般的で標準的な改善版]
+
+【Version2：より丁寧な表現】
+[より敬語を使った丁寧な改善版]
+
+【Version3：簡潔で明確な表現】
+[簡潔さを重視した改善版]
+
+元のテキスト：
+${text}`,
+            temperature: 0.5
+        },
+
+        // TT - Translation
+        translation: {
+            system: "あなたは専門的な翻訳者です。言語を自動検出して適切な言語に翻訳してください。日本語?英語の翻訳を中心に、自然で正確な翻訳を提供してください。",
+            user: (text) => `以下のテキストを翻訳してください。言語を自動検出して、適切な言語に翻訳してください：
+
+- 日本語のテキストの場合：英語に翻訳
+- 英語のテキストの場合：日本語に翻訳
+- その他の言語の場合：英語に翻訳
+
+翻訳のガイドライン：
+1. 自然で流暢な翻訳にする
+2. 技術用語は適切に翻訳する
+3. 文脈を考慮した翻訳にする
+4. ビジネス文書として適切な表現にする
+5. 翻訳結果のみを返す（説明や注釈は不要）
+
+翻訳対象テキスト：
+${text}
+
+翻訳結果：`,
+            temperature: 0.3
+        }
+    };
+    // ===== END PROMPTS CONFIGURATION =====
 
     // Global state
     let keyboardListenerActive = false;
@@ -115,6 +284,96 @@ Requirements:
     let keydownHandler = null;
     let selectionChangeHandler = null;
     let isProcessing = false;
+
+    // Custom dialog function with HTML support
+    function showCustomDialogHTML(title, htmlMessage, showCopyButtons = false) {
+        const overlay = document.createElement('div');
+        Object.assign(overlay.style, {
+            position: 'fixed', top: '0', left: '0', width: '100%', height: '100%',
+            backgroundColor: 'rgba(0,0,0,0.5)', zIndex: '10001',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+        });
+
+        const dialog = document.createElement('div');
+        Object.assign(dialog.style, {
+            backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+            maxWidth: showCopyButtons ? '900px' : '700px', width: '90%', fontFamily: 'Arial, sans-serif',
+            maxHeight: '80vh', display: 'flex', flexDirection: 'column'
+        });
+
+        const titleBar = document.createElement('div');
+        Object.assign(titleBar.style, {
+            backgroundColor: CONFIG.ui.dialogColor, color: '#fff', padding: '15px 20px',
+            borderRadius: '8px 8px 0 0', fontSize: '16px', fontWeight: 'bold'
+        });
+        titleBar.textContent = title;
+
+        const content = document.createElement('div');
+        Object.assign(content.style, {
+            padding: '20px', fontSize: '14px', lineHeight: '1.6',
+            overflowY: 'auto', flex: '1'
+        });
+        content.innerHTML = htmlMessage; // Use innerHTML instead of textContent
+
+        const buttonArea = document.createElement('div');
+        Object.assign(buttonArea.style, {
+            padding: '15px 20px', textAlign: 'center', borderTop: '1px solid #eee',
+            flexShrink: '0'
+        });
+
+        if (showCopyButtons) {
+            // Extract the three variations for copy buttons
+            const variations = extractJapaneseVariationsHTML(htmlMessage);
+
+            if (variations.length > 0) {
+                variations.forEach((variation, index) => {
+                    const copyButton = document.createElement('button');
+                    Object.assign(copyButton.style, {
+                        backgroundColor: CONFIG.ui.dialogColor, color: '#fff', border: 'none',
+                        padding: '8px 16px', borderRadius: '5px', cursor: 'pointer', fontSize: '12px',
+                        margin: '0 5px'
+                    });
+                    copyButton.textContent = `Copy ${index + 1}`;
+                    copyButton.onclick = () => {
+                        navigator.clipboard.writeText(variation.text).then(() => {
+                            copyButton.textContent = 'Copied!';
+                            copyButton.style.backgroundColor = '#28a745';
+                            setTimeout(() => {
+                                copyButton.textContent = `Copy ${index + 1}`;
+                                copyButton.style.backgroundColor = CONFIG.ui.dialogColor;
+                            }, 2000);
+                        });
+                    };
+                    buttonArea.appendChild(copyButton);
+                });
+            }
+        }
+
+        const okButton = document.createElement('button');
+        Object.assign(okButton.style, {
+            backgroundColor: showCopyButtons ? '#6c757d' : CONFIG.ui.dialogColor,
+            color: '#fff', border: 'none', padding: '10px 30px',
+            borderRadius: '5px', cursor: 'pointer', fontSize: '14px',
+            margin: showCopyButtons ? '0 5px' : '0'
+        });
+        okButton.textContent = 'Close';
+        okButton.onclick = () => document.body.removeChild(overlay);
+
+        buttonArea.appendChild(okButton);
+        dialog.append(titleBar, content, buttonArea);
+        overlay.appendChild(dialog);
+
+        overlay.onclick = (e) => e.target === overlay && document.body.removeChild(overlay);
+
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                document.body.removeChild(overlay);
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+        document.body.appendChild(overlay);
+    }
 
     // Custom dialog function
     function showCustomDialog(title, message, showCopyButtons = false) {
@@ -206,6 +465,30 @@ Requirements:
         document.body.appendChild(overlay);
     }
 
+    // Extract Japanese variations from HTML ChatGPT response
+    function extractJapaneseVariationsHTML(htmlText) {
+        const variations = [];
+        const patterns = [
+            /【Version1[：:].*?】\s*([\s\S]*?)(?=【Version[2３]|$)/,
+            /【Version2[：:].*?】\s*([\s\S]*?)(?=【Version[3３]|$)/,
+            /【Version3[：:].*?】\s*([\s\S]*?)(?=【|$)/
+        ];
+
+        patterns.forEach((pattern, index) => {
+            const match = htmlText.match(pattern);
+            if (match && match[1]) {
+                // Remove HTML tags for copying
+                const cleanText = match[1].trim().replace(/<[^>]*>/g, '');
+                variations.push({
+                    title: `Version${index + 1}`,
+                    text: cleanText
+                });
+            }
+        });
+
+        return variations;
+    }
+
     // Extract Japanese variations from ChatGPT response
     function extractJapaneseVariations(text) {
         const variations = [];
@@ -231,7 +514,7 @@ Requirements:
     // Generic ChatGPT API call
     async function callChatGPT(systemPrompt, userPrompt, temperature = 0.1) {
         // Check if API key is configured
-        if (!CONFIG.api.key || CONFIG.api.key === "YOUR_OPENAI_API_KEY_HERE") {
+        if (!CONFIG.api.key || CONFIG.api.key === "YOUR_API_KEY_HERE") {
             throw new Error("Please configure your OpenAI API key in the CONFIG.api.key field");
         }
 
@@ -300,92 +583,41 @@ Requirements:
         }
     }
 
+    // Show help guide
+    function showHelpGuide() {
+        const helpContent = `? Zendesk ChatGPT Assistant
+
+How to use: Select text then double-click corresponding keys
+
+ZZ - Zendesk ticket search (analyze errors or keywords)
+CC - Confluence search (convert to technical questions)
+EE - Internal TEE questions (format and copy to clipboard)
+TT - Smart translation (Japanese ? English, copy to clipboard)
+JJ - Japanese improvement (provides 3 version options)
+DD - Datadog docs search (extract keywords)
+GG - Google Cloud search (same logic as ZZ)
+HH - Help guide (no text selection needed)`;
+
+        showCustomDialog('Help Guide', helpContent);
+        showStatusAtSelection("success");
+    }
+
     // Confluence search
     async function askChatGPT(text) {
-        const prompt = `Convert the following customer message into a short, clear technical question (maximum 10-15 words). Focus on the main issue and make it a proper question. Return only the question without quotes or additional formatting:\n\n${text}`;
-        return await callChatGPT("You are a helpful support assistant.", prompt, 0.2);
+        const config = PROMPTS.confluence;
+        return await callChatGPT(config.system, config.user(text), config.temperature);
     }
 
     // Internal TEE question format
     async function askChatGPTForInternalQuery(text) {
-        const prompt = `Convert the following customer issue into a direct question format for asking internal TEE engineers. You MUST follow this exact format and ALWAYS end with "Thank you for your help in advance!":
-
-Question:
-[A single, direct, actionable question that TEE can immediately understand and answer - should be one clear sentence asking for specific help or information]
-
-Background:
-[Detailed context about the customer's situation, what they're trying to do, or what error they're encountering - only include this section if the question needs additional context to be understood]
-
-Thank you for your help in advance!
-
-IMPORTANT: You MUST always include "Thank you for your help in advance!" at the end of every response.
-
-Guidelines:
-- Question should be ONE clear, direct question that gets straight to the point
-- Question should ask for specific help, guidance, or information
-- Background should provide context that helps TEE understand the customer's situation
-- Background should include relevant details like error messages, configurations, or customer goals
-- Only include Background section if the question needs additional context
-- Keep it concise and professional
-- ALWAYS end with "Thank you for your help in advance!"
-
-Examples:
-
-Example 1 (Simple question - no background needed):
-Customer: "How do I set up alerts for high CPU usage?"
-→
-Question: How can a customer set up alerts for high CPU usage in Datadog?
-
-Thank you for your help in advance!
-
-Example 2 (Complex issue - background needed):
-Customer: "We're getting 'could not update remote-config state: rpc error: code = Unknown desc = database not open' when trying to enable APM on our Node.js app"
-→
-Question: How can we resolve the 'database not open' error when enabling APM?
-
-Background:
-Customer is trying to enable APM on their Node.js application but getting this specific error: "could not update remote-config state: rpc error: code = Unknown desc = database not open"
-
-Thank you for your help in advance!
-
-Example 3 (Feature question with context):
-Customer: "Our team wants to monitor custom business metrics from our e-commerce platform but we're not sure which approach is best for high-volume data"
-→
-Question: What's the recommended approach for monitoring custom business metrics from a high-volume e-commerce platform?
-
-Background:
-Customer has an e-commerce platform that generates high-volume data and wants to monitor custom business metrics, but they're unsure about the best implementation approach.
-
-Thank you for your help in advance!
-
-Here's the customer issue:
-
-${text}`;
-
-        return await callChatGPT("You are a helpful assistant that formats customer issues for internal engineering discussions. Create clear, distinct Question and Background sections where the Question is direct and actionable, and Background provides necessary context.", prompt, 0.2);
+        const config = PROMPTS.internal;
+        return await callChatGPT(config.system, config.user(text), config.temperature);
     }
 
     // Datadog keywords extraction
     async function askChatGPTForDatadogKeywords(text) {
-        const prompt = `Extract Datadog-related keywords from the following customer message. Return ONLY English keywords (maximum 3 keywords) separated by spaces. No quotes, commas, or punctuation.
-
-IMPORTANT RULES:
-- Always return keywords in ENGLISH only, never in Japanese or other languages
-- Maximum 3 keywords only
-- Use standard Datadog terminology in English
-- Translate Japanese terms to their English equivalents
-
-Examples:
-- "ブラウザテストに設定するStep(操作記録)の実行する/しないをif分のような形で制御できないか" → browser test step
-- "Is it possible to view custom events from Java Flight Recorder on Datadog's Java Profile screen" → Java Profile recorder
-- "How to configure APM traces for Node.js application" → APM traces Node.js
-- "ログエクスプローラーでログが表示されない" → Log Explorer logs
-
-Customer message: ${text}
-
-English keywords:`;
-
-        const result = await callChatGPT("You are a helpful assistant that extracts Datadog-specific keywords for documentation search. Always return keywords in English only, maximum 3 keywords, separated by spaces without quotes, commas, or any punctuation. Translate any non-English terms to their English equivalents.", prompt);
+        const config = PROMPTS.datadog;
+        const result = await callChatGPT(config.system, config.user(text), config.temperature);
 
         if (result) {
             let keywords = result.replace(/^["']|["']$/g, '').replace(/["']/g, '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
@@ -400,76 +632,20 @@ English keywords:`;
 
     // Text translation
     async function askChatGPTForTranslation(text) {
-        const prompt = `以下のテキストを翻訳してください。言語を自動検出して、適切な言語に翻訳してください：
-
-- 日本語のテキストの場合：英語に翻訳
-- 英語のテキストの場合：日本語に翻訳
-- その他の言語の場合：英語に翻訳
-
-翻訳のガイドライン：
-1. 自然で流暢な翻訳にする
-2. 技術用語は適切に翻訳する
-3. 文脈を考慮した翻訳にする
-4. ビジネス文書として適切な表現にする
-5. 翻訳結果のみを返す（説明や注釈は不要）
-
-翻訳対象テキスト：
-${text}
-
-翻訳結果：`;
-
-        return await callChatGPT("あなたは専門的な翻訳者です。言語を自動検出して適切な言語に翻訳してください。日本語?英語の翻訳を中心に、自然で正確な翻訳を提供してください。", prompt, 0.3);
+        const config = PROMPTS.translation;
+        return await callChatGPT(config.system, config.user(text), config.temperature);
     }
 
     // Japanese text improvement with 3 variations
     async function askChatGPTForJapaneseImprovement(text) {
-        const prompt = `以下の日本語テキストを、より自然で丁寧なビジネス日本語に改善してください。**3つの異なるVersion**を提供してください。
-
-改善の観点：
-1. 文法の正確性を向上させる
-2. より自然で流暢な表現にする
-3. 敬語や丁寧語を適切に使用する
-4. 数値や単位の表記を統一する
-5. 文章の流れを改善し、読みやすくする
-6. ビジネス文書として適切な表現にする
-
-以下の形式で回答してください：
-
-【Version1：標準的な改善】
-[最も一般的で標準的な改善版]
-
-【Version2：より丁寧な表現】
-[より敬語を使った丁寧な改善版]
-
-【Version3：簡潔で明確な表現】
-[簡潔さを重視した改善版]
-
-元のテキスト：
-${text}`;
-
-        return await callChatGPT("あなたは日本語の文章校正の専門家です。同じ内容を3つの異なるスタイル（標準・丁寧・簡潔）で改善し、それぞれを明確に区別して提示してください。", prompt, 0.5);
+        const config = PROMPTS.japanese;
+        return await callChatGPT(config.system, config.user(text), config.temperature);
     }
 
     // Zendesk keywords extraction
     async function askChatGPTForZendeskKeywords(text) {
-        const prompt = `Analyze the following text and determine if it's an error log or a general customer issue.
-
-If it's an ERROR LOG (contains technical error messages, stack traces, error codes, or system logs):
-- Return "ERROR_LOG:" followed by the exact error message
-
-If it's a GENERAL ISSUE (customer questions, feature requests, general problems):
-- Return "KEYWORDS:" followed by relevant keywords separated by spaces (maximum 4 keywords)
-
-Examples:
-- "could not update remote-config state: rpc error: code = Unknown desc = database not open" → ERROR_LOG:could not update remote-config state: rpc error: code = Unknown desc = database not open
-- "How to configure dashboard alerts for high CPU usage?" → KEYWORDS:dashboard alerts CPU usage
-- "RUM session replay feature not working properly on mobile devices" → KEYWORDS:RUM session replay mobile
-
-Customer text: ${text}
-
-Response:`;
-
-        const result = await callChatGPT("You are a helpful assistant that analyzes customer text to determine if it's an error log (search directly) or general issue (extract maximum 4 keywords). Always start your response with either 'ERROR_LOG:' or 'KEYWORDS:'", prompt);
+        const config = PROMPTS.zendesk;
+        const result = await callChatGPT(config.system, config.user(text), config.temperature);
 
         if (result) {
             if (result.startsWith('ERROR_LOG:')) {
@@ -495,7 +671,8 @@ Response:`;
 
     // Execute search functions
     async function performSearch(type, selectedText) {
-        if (!selectedText) {
+        // Help function doesn't require selected text
+        if (!selectedText && type !== 'help') {
             showCustomDialog('No Text Selected', `Please select text first, then double-click ${type.toUpperCase()} key`);
             return;
         }
@@ -583,6 +760,10 @@ Response:`;
                         await copyToClipboardWithFallback(translatedText, CONFIG.messages.translation);
                     }
                     return;
+
+                case 'help':
+                    showHelpGuide();
+                    return;
             }
 
             if (searchUrl) {
@@ -613,7 +794,7 @@ Response:`;
             // Always use physical key position (event.code) for international keyboard support
             const codeToKey = {
                 'KeyC': 'c', 'KeyE': 'e', 'KeyD': 'd',
-                'KeyZ': 'z', 'KeyJ': 'j', 'KeyT': 't', 'KeyG': 'g'
+                'KeyZ': 'z', 'KeyJ': 'j', 'KeyT': 't', 'KeyG': 'g', 'KeyH': 'h'
             };
 
             const key = codeToKey[event.code];
@@ -634,9 +815,9 @@ Response:`;
                 activeElement.isContentEditable
             );
 
-            // If there's selected text
-            if (selectedText) {
-                // Always prevent default when we have selected text and it's our target keys
+            // If there's selected text OR it's the help key
+            if (selectedText || key === 'h') {
+                // Always prevent default when we have selected text or it's help key
                 event.preventDefault();
                 event.stopPropagation();
 
@@ -648,11 +829,11 @@ Response:`;
                     });
                     lastKeyTimes[key] = 0;
                 } else {
-                    // First key press with selected text - just record time
+                    // First key press with selected text or help key - just record time
                     lastKeyTimes[key] = currentTime;
                 }
             } else {
-                // No selected text - allow normal typing
+                // No selected text and not help key - allow normal typing
                 lastKeyTimes[key] = currentTime;
             }
         };
@@ -839,6 +1020,6 @@ Response:`;
         init();
     }
 
-    console.log('? Usage: Select text, then double-click physical keys CC/EE/DD/ZZ/GG/JJ/TT (works with any keyboard layout)');
+    console.log('? Usage: Select text, then double-click physical keys CC/EE/DD/ZZ/GG/JJ/TT/HH (works with any keyboard layout)');
 
 })();
