@@ -2,7 +2,7 @@
 // @name         Zendesk ChatGPT Multi-Function Assistant 
 // @namespace    http://tampermonkey.net/
 // @version      1.0.0
-// @description  6-in-1 ChatGPT assistant: CC=Confluence, EE=Internal TEE, DD=Datadog Docs, ZZ=Zendesk, JJ=Japanese Improve, TT=Translation
+// @description  7-in-1 ChatGPT assistant: CC=Confluence, EE=Internal TEE, DD=Datadog Docs, ZZ=Zendesk, GG=Google Cloud Search, JJ=Japanese Improve, TT=Translation
 // @match        https://*.zendesk.com/*
 // @author       Yuan Chang
 // ==/UserScript==
@@ -10,7 +10,7 @@
 /*
 === USAGE INSTRUCTIONS ===
 
-This script provides six main functions for Zendesk customer support:
+This script provides seven main functions for Zendesk customer support:
 
 1. CONFLUENCE SEARCH (Double-click CC):
    - Select customer message text
@@ -38,14 +38,21 @@ This script provides six main functions for Zendesk customer support:
    - For general issues: ChatGPT extracts relevant keywords
    - Automatically opens Zendesk ticket search
 
-5. JAPANESE TEXT IMPROVEMENT (Double-click JJ):
+5. GOOGLE CLOUD SEARCH (Double-click GG):
+   - Select customer issue text or error logs
+   - Quickly double-click the 'G' key twice
+   - For error logs: searches directly with the error message
+   - For general issues: ChatGPT extracts relevant keywords
+   - Automatically opens Google Cloud Search with extracted keywords
+
+6. JAPANESE TEXT IMPROVEMENT (Double-click JJ):
    - Select Japanese text that needs improvement
    - Quickly double-click the 'J' key twice
    - ChatGPT provides 3 different improvement variations
    - Choose and copy the version you prefer
    - Options: Standard, Polite, Concise styles
 
-6. TEXT TRANSLATION (Double-click TT):
+7. TEXT TRANSLATION (Double-click TT):
    - Select any text that needs translation
    - Quickly double-click the 'T' key twice
    - ChatGPT translates text (auto-detects language and translates to appropriate target)
@@ -84,15 +91,16 @@ Requirements:
             statusTimeout: 2000,
             dialogColor: '#632CA6'
         },
-        keys: ['c', 'e', 'd', 'z', 'j', 't'],
+        keys: ['c', 'e', 'd', 'z', 'j', 't', 'g'],
         searchTypes: {
             c: 'confluence', e: 'internal', d: 'datadog',
-            z: 'zendesk', j: 'japanese', t: 'translation'
+            z: 'zendesk', j: 'japanese', t: 'translation', g: 'google'
         },
         urls: {
             confluence: 'https://datadoghq.atlassian.net/wiki/search?text=',
             datadog: 'https://docs.datadoghq.com/search/?lang_pref=en&site=us&s=',
-            zendesk: 'https://datadog.zendesk.com/agent/search/1?type=ticket&q='
+            zendesk: 'https://datadog.zendesk.com/agent/search/1?type=ticket&q=',
+            google: 'https://cloudsearch.google.com/cloudsearch/search?q='
         },
         messages: {
             internal: 'Question to TEE  (copied to clipboard)',
@@ -540,6 +548,20 @@ Response:`;
                     }
                     break;
 
+                case 'google':
+                    const googleResult = await askChatGPTForZendeskKeywords(selectedText);
+                    if (googleResult) {
+                        let googleQuery = googleResult.content;
+                        if (googleQuery.length > 150) {
+                            googleQuery = googleQuery.substring(0, 150);
+                            const lastSpaceIndex = googleQuery.lastIndexOf(' ');
+                            if (lastSpaceIndex > 50) googleQuery = googleQuery.substring(0, lastSpaceIndex);
+                            googleQuery += '...';
+                        }
+                        searchUrl = generateSearchUrl('google', googleQuery);
+                    }
+                    break;
+
                 case 'internal':
                     const internalQuery = await askChatGPTForInternalQuery(selectedText);
                     if (internalQuery) {
@@ -591,7 +613,7 @@ Response:`;
             // Always use physical key position (event.code) for international keyboard support
             const codeToKey = {
                 'KeyC': 'c', 'KeyE': 'e', 'KeyD': 'd',
-                'KeyZ': 'z', 'KeyJ': 'j', 'KeyT': 't'
+                'KeyZ': 'z', 'KeyJ': 'j', 'KeyT': 't', 'KeyG': 'g'
             };
 
             const key = codeToKey[event.code];
@@ -817,6 +839,6 @@ Response:`;
         init();
     }
 
-    console.log('? Usage: Select text, then double-click physical keys CC/EE/DD/ZZ/JJ/TT (works with any keyboard layout)');
+    console.log('? Usage: Select text, then double-click physical keys CC/EE/DD/ZZ/GG/JJ/TT (works with any keyboard layout)');
 
 })();
