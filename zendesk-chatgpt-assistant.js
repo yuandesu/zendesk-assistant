@@ -210,16 +210,16 @@ Requirements:
     function extractJapaneseVariations(text) {
         const variations = [];
         const patterns = [
-            /【バリエーション1[：:].*?】\s*([\s\S]*?)(?=【バリエーション[2３]|$)/,
-            /【バリエーション2[：:].*?】\s*([\s\S]*?)(?=【バリエーション[3３]|$)/,
-            /【バリエーション3[：:].*?】\s*([\s\S]*?)(?=【|$)/
+            /【Version1[：:].*?】\s*([\s\S]*?)(?=【Version[2３]|$)/,
+            /【Version2[：:].*?】\s*([\s\S]*?)(?=【Version[3３]|$)/,
+            /【Version3[：:].*?】\s*([\s\S]*?)(?=【|$)/
         ];
 
         patterns.forEach((pattern, index) => {
             const match = text.match(pattern);
             if (match && match[1]) {
                 variations.push({
-                    title: `バリエーション${index + 1}`,
+                    title: `Version${index + 1}`,
                     text: match[1].trim()
                 });
             }
@@ -423,7 +423,7 @@ ${text}
 
     // Japanese text improvement with 3 variations
     async function askChatGPTForJapaneseImprovement(text) {
-        const prompt = `以下の日本語テキストを、より自然で丁寧なビジネス日本語に改善してください。**3つの異なるバリエーション**を提供してください。
+        const prompt = `以下の日本語テキストを、より自然で丁寧なビジネス日本語に改善してください。**3つの異なるVersion**を提供してください。
 
 改善の観点：
 1. 文法の正確性を向上させる
@@ -435,13 +435,13 @@ ${text}
 
 以下の形式で回答してください：
 
-【バリエーション1：標準的な改善】
+【Version1：標準的な改善】
 [最も一般的で標準的な改善版]
 
-【バリエーション2：より丁寧な表現】
+【Version2：より丁寧な表現】
 [より敬語を使った丁寧な改善版]
 
-【バリエーション3：簡潔で明確な表現】
+【Version3：簡潔で明確な表現】
 [簡潔さを重視した改善版]
 
 元のテキスト：
